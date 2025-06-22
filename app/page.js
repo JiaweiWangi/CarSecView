@@ -9,6 +9,7 @@ export default function Home() {
   const controllerRef = useRef(null); // 存储AbortController实例
   const readerRef = useRef(null);     // 存储当前的读取器实例
   let receivedLines = []; // 全局声明
+  const coderde = new TextDecoder('utf-8');
   
   const fetchNewData = async (attackType) => {
     try {
@@ -55,7 +56,7 @@ export default function Home() {
         if (done) {
           break;
         }
-        const decoder = new TextDecoder('utf-8');
+
         const chunk = decoder.decode(value, { stream: true });
         receivedLines = receivedLines.concat(chunk.split('\n')).filter(line => line.trim() !== '');
 
