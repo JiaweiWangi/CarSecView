@@ -7,16 +7,36 @@ export default function Home() {
   const [apiResponseMessage, setApiResponseMessage] = useState('');
   const [trafficData, setTrafficData] = useState('');
   const controllerRef = useRef(null); // 存储AbortController实例
-  const readerRef = useRef(null);     // 存储当前的读取器实例
-  let receivedLines = []; // 全局声明
+  const readerRef = useRef(null);    
+  const isMountedRef = useRef(true); // 跟踪组件是否已卸载
+  const receivedLinesRef = useRef([]); // 使用ref存储行数据，避免闭包问题
   const decoder = new TextDecoder('utf-8');
+
+  // 组件卸载时更新标志
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // 清理所有活动请求
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+        controllerRef.current = null;
+      }
+      if (readerRef.current) {
+        readerRef.current.cancel().catch(e => console.warn("Error canceling reader:", e));
+        readerRef.current = null;
+      }
+    };
+  }, []);
 
   const fetchNewData = async (attackType) => {
     try {
       const response = await fetch(`http://localhost:8000/new_api_endpoint?attack_type=${attackType}`);
       const data = await response.json();
       console.log(data);
-      setApiResponseMessage(data.message);
+      if (isMountedRef.current) {
+        setApiResponseMessage(data.message);
+      }
     } catch (error) {
       console.error('Failed to fetch new data:', error);
       setApiResponseMessage('Failed to fetch new data.');
@@ -24,18 +44,23 @@ export default function Home() {
   };
 
   const fetchStreamData = async (attackType) => {
-    // 1. 终止之前的请求
+    // 终止之前的请求
     if (controllerRef.current) {
       controllerRef.current.abort();
       controllerRef.current = null;
     }
+
     if (readerRef.current) {
-      readerRef.current.cancel();
+      readerRef.current.cancel().catch(e => console.warn("Error canceling previous reader:", e));
       readerRef.current = null;
     }
+
+    let isAborted = false; // 跟踪请求是否被中止
     
     try {
-      setTrafficData('正在加载数据...');
+      if (isMountedRef.current) {
+        setTrafficData('正在加载数据...');
+      }
       // 2. 创建新的AbortController实例
       controllerRef.current = new AbortController();
       const signal = controllerRef.current.signal;
@@ -48,6 +73,11 @@ export default function Home() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      // 验证响应是否可流式处理
+      if (!response.body) {
+        throw new Error('响应不包含可读取的body');
+      }
+
       const reader = response.body.getReader();
       readerRef.current = reader; // 存储读取器引用
 
@@ -58,23 +88,26 @@ export default function Home() {
         }
 
         const chunk = decoder.decode(value, { stream: true });
-        receivedLines = receivedLines.concat(chunk.split('\n')).filter(line => line.trim() !== '');
+        const newLines = chunk.split('\n').map(line => line.replace(/^data: /, '')).filter(line => line.trim() !== '');
+        receivedLinesRef.current = receivedLinesRef.current.concat(newLines);
 
         // 只保留最新的20条数据
-        if (receivedLines.length > 20) {
-          receivedLines = receivedLines.slice(receivedLines.length - 20);
+        if (receivedLinesRef.current.length > 20) {
+          receivedLinesRef.current = receivedLinesRef.current.slice(-20);
         }
         
-        // 为不同攻击类型添加颜色标识
-        const coloredLines = receivedLines.map(line => {
-          if (attackType === 'Dos攻击') return `\x1b[31m${line}\x1b[0m`;
-          if (attackType === '模糊攻击') return `\x1b[33m${line}\x1b[0m`;
-          if (attackType === 'RPM攻击') return `\x1b[35m${line}\x1b[0m`;
-          if (attackType === 'Gear攻击') return `\x1b[34m${line}\x1b[0m`;
-          return `\x1b[32m${line}\x1b[0m`; // 正常流量
-        });
+        // 更新UI
+        if (isMountedRef.current && !isAborted) {
+          const coloredLines = receivedLinesRef.current.map(line => {
+            if (attackType === 'Dos攻击') return `\x1b[31m${line}\x1b[0m`;
+            if (attackType === '模糊攻击') return `\x1b[33m${line}\x1b[0m`;
+            if (attackType === 'RPM攻击') return `\x1b[35m${line}\x1b[0m`;
+            if (attackType === 'Gear攻击') return `\x1b[34m${line}\x1b[0m`;
+            return `\x1b[32m${line}\x1b[0m`;
+          });
         
-        setTrafficData(coloredLines.join('\n'));
+        setTrafficData(coloredLines.filter(line => line.trim() !== '').join('\n'));
+      }
       }
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -82,31 +115,24 @@ export default function Home() {
       } else {
          console.error('加载数据失败:', error);
         
-        // 提取错误信息并显示
-        const errorMessage = error.message || '未知错误';
-        setTrafficData(`加载数据失败。错误详情: ${errorMessage}`);
-        
-        // 如需显示完整错误对象（用于调试）
-        console.log('错误详情:', error);
+        if (isMountedRef.current && !isAborted) {
+          const errorMessage = error.message || '未知错误';
+          setTrafficData(`加载数据失败。错误详情: ${errorMessage}`);
+        }
       }
     } finally {
-      // 4. 清理资源
+      // 无论如何都清理资源
       controllerRef.current = null;
-      readerRef.current = null;
+      if (readerRef.current) {
+        try {
+          readerRef.current.cancel();
+        } catch (e) {
+          console.warn("Error canceling reader in finally:", e);
+        }
+        readerRef.current = null;
+        }
     }
   };
-
-  // 5. 组件卸载时终止所有请求
-  useEffect(() => {
-    return () => {
-      if (controllerRef.current) {
-        controllerRef.current.abort();
-      }
-      if (readerRef.current) {
-        readerRef.current.cancel();
-      }
-    };
-  }, []);
 
   const handleAttackTypeClick = (attackType) => {
     fetchNewData(attackType);

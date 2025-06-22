@@ -8,7 +8,6 @@ import datetime
 import re
 import aiofiles  # 用于异步文件操作
 import asyncio
-
 app = FastAPI()
 
 app.add_middleware(
@@ -137,11 +136,11 @@ async def read_dataset(attack_type: str = "正常流量"):
                 current_time = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
                 
                 # 构建并发送数据
-                data_str = (f"data: {{\"data\": \"{current_time},"
-                           f"ID:{processed_data[1]},"
-                           f"DLC:{int(processed_data[2])},"
-                           f"{','.join(str(processed_data[i]) for i in range(3, int(processed_data[2]) + 3))}"
-                           f"\"}}\n\n")
+                # 移除"data: "前缀和JSON结构，直接输出CSV格式
+                data_str = (f"{current_time},"
+                            f"ID:{processed_data[1]},"
+                            f"DLC:{int(processed_data[2])},"
+                            f"{','.join(str(processed_data[i]) for i in range(3, int(processed_data[2]) + 3))}\n")
                 
                 yield data_str
                 first_data_sent = True
@@ -150,6 +149,7 @@ async def read_dataset(attack_type: str = "正常流量"):
         yield "data: {\"message\": \"数据传输完成\"}\n\n"
     
     return StreamingResponse(generate(), media_type="text/event-stream")
+
 @app.get("/new_api_endpoint")
 async def new_api_endpoint(attack_type: str):
     print(f"Received request for attack type: {attack_type}")
