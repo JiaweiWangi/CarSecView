@@ -9,8 +9,8 @@ export default function Home() {
   const controllerRef = useRef(null); // 存储AbortController实例
   const readerRef = useRef(null);     // 存储当前的读取器实例
   let receivedLines = []; // 全局声明
-  const coderde = new TextDecoder('utf-8');
-  
+  const decoder = new TextDecoder('utf-8');
+
   const fetchNewData = async (attackType) => {
     try {
       const response = await fetch(`http://localhost:8000/new_api_endpoint?attack_type=${attackType}`);
