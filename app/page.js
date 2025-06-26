@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
+import { useState as useReactState } from "react";
 
 export default function Home() {
+  const [showCover, setShowCover] = useReactState(true);
   const [apiResponseMessage, setApiResponseMessage] = useState('');
   const [trafficData, setTrafficData] = useState('');
   const controllerRef = useRef(null); // 存储AbortController实例
@@ -139,6 +141,55 @@ export default function Home() {
     fetchStreamData(attackType);
   };
 
+  if (showCover) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        width: "100vw",
+        background: "url('/circuit-bg.jpg') center center / cover no-repeat, #e3f2fd",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        overflow: "hidden"
+      }}>
+        <div className="flex flex-col items-center justify-center relative z-10" style={{
+          background: "rgba(255,255,255,0.92)",
+          borderRadius: "2rem",
+          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.13)",
+          padding: "3rem 4rem",
+          minWidth: "350px",
+          maxWidth: "90vw"
+        }}>
+          <div style={{
+            width: "100%",
+            textAlign: "center",
+            fontSize: "3.2rem",
+            fontWeight: "bold",
+            marginBottom: "2.2rem",
+            background: "linear-gradient(90deg, #6ec6ff 0%, #2196f3 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            textShadow: "0 4px 24px rgba(33, 150, 243, 0.18)",
+            letterSpacing: "2px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
+            车联网入侵检测系统
+          </div>
+          <button
+            className="px-12 py-5 text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-400 text-white rounded-2xl shadow-2xl hover:scale-105 hover:from-blue-600 hover:to-cyan-500 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-200"
+            style={{ marginTop: "1.5rem", boxShadow: "0 6px 24px 0 rgba(33, 150, 243, 0.13)" }}
+            onClick={() => setShowCover(false)}
+          >
+            开始使用
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row h-screen p-6 gap-6 bg-gray-50">
       {/* 左侧车辆流量 */}
@@ -190,7 +241,6 @@ export default function Home() {
               {apiResponseMessage}
             </div>
           )}
-          
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { label: '异常流量', value: '0', color: 'red' },
@@ -206,6 +256,14 @@ export default function Home() {
                 <div className="text-2xl font-bold text-gray-800">{item.value}</div>
               </div>
             ))}
+          </div>
+          {/* 攻击数据展示容器 */}
+          <div className="mt-8">
+            <div className="text-base font-semibold text-red-600 mb-2">检测攻击数据</div>
+            <div className="p-4 bg-red-50 rounded-lg min-h-[60px] border border-red-200 text-red-700 text-base font-mono shadow-inner">
+              {/* 这里将来可动态渲染检测到的攻击数据 */}
+              暂无检测到的攻击数据。
+            </div>
           </div>
         </div>
       </div>
