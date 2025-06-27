@@ -134,15 +134,19 @@ async def read_dataset(attack_type: str = "正常流量"):
                 
                 # 格式化时间
                 current_time = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
-                
+                date_part, time_part = current_time.split(' ', 1)  # 以第一个空格为界分割
+
+                # 新增：每次流式推送前先推送日期
+                yield f"date_part:{date_part}\n"
+
                 # 构建并发送数据
                 # 移除"data: "前缀和JSON结构，直接输出CSV格式
-                data_str = (f"{current_time},"
+                data_str = (f"{time_part},"
                             f"ID:{processed_data[1]},"
                             f"DLC:{int(processed_data[2])},"
                             f"{','.join(str(processed_data[i]) for i in range(3, int(processed_data[2]) + 3))}\n")
-                
                 yield data_str
+                
                 first_data_sent = True
         
         # 发送结束标记

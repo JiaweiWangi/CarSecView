@@ -13,6 +13,8 @@ export default function Home() {
   const isMountedRef = useRef(true); // 跟踪组件是否已卸载
   const receivedLinesRef = useRef([]); // 使用ref存储行数据，避免闭包问题
   const decoder = new TextDecoder('utf-8');
+  const [currentDate, setCurrentDate] = useState('');
+  const [datePart, setDatePart] = useState('');
 
   // 组件卸载时更新标志
   useEffect(() => {
@@ -91,13 +93,17 @@ export default function Home() {
 
         const chunk = decoder.decode(value, { stream: true });
         const newLines = chunk.split('\n').map(line => line.replace(/^data: /, '')).filter(line => line.trim() !== '');
-        receivedLinesRef.current = receivedLinesRef.current.concat(newLines);
-
-        // 只保留最新的20条数据
-        if (receivedLinesRef.current.length > 20) {
-          receivedLinesRef.current = receivedLinesRef.current.slice(-20);
+        newLines.forEach(line => {
+          if (line.startsWith('date_part:')) {
+            setDatePart(line.replace('date_part:', '').trim());
+          } else {
+            receivedLinesRef.current = receivedLinesRef.current.concat([line]);
+          }
+        });
+        // 只保留最新的24条数据
+        if (receivedLinesRef.current.length > 24) {
+          receivedLinesRef.current = receivedLinesRef.current.slice(-24);
         }
-        
         // 更新UI
         if (isMountedRef.current && !isAborted) {
           const coloredLines = receivedLinesRef.current.map(line => {
@@ -107,7 +113,6 @@ export default function Home() {
             if (attackType === 'Gear攻击') return `\x1b[34m${line}\x1b[0m`;
             return `\x1b[32m${line}\x1b[0m`;
           });
-        
         setTrafficData(coloredLines.filter(line => line.trim() !== '').join('\n'));
       }
       }
@@ -146,7 +151,7 @@ export default function Home() {
       <div style={{
         minHeight: "100vh",
         width: "100vw",
-        background: "url('/circuit-bg.jpg') center center / cover no-repeat, #e3f2fd",
+        background: "radial-gradient(circle,rgba(80, 196, 241, 0.23),rgba(0, 105, 252, 0.76))", 
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -156,18 +161,18 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center relative z-10" style={{
           background: "rgba(255,255,255,0.92)",
           borderRadius: "2rem",
-          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.13)",
-          padding: "3rem 4rem",
+          boxShadow: "0 8px 32px 0 rgba(2, 2, 6, 0.75)",
+          padding: "5rem 7rem",
           minWidth: "350px",
           maxWidth: "90vw"
         }}>
           <div style={{
             width: "100%",
             textAlign: "center",
-            fontSize: "3.2rem",
+            fontSize: "4.2rem",
             fontWeight: "bold",
             marginBottom: "2.2rem",
-            background: "linear-gradient(90deg, #6ec6ff 0%, #2196f3 100%)",
+            background: "linear-gradient(90deg,rgb(0, 0, 0) 0%,rgb(1, 6, 10) 100%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             textShadow: "0 4px 24px rgba(33, 150, 243, 0.18)",
@@ -179,7 +184,7 @@ export default function Home() {
             车联网入侵检测系统
           </div>
           <button
-            className="px-12 py-5 text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-400 text-white rounded-2xl shadow-2xl hover:scale-105 hover:from-blue-600 hover:to-cyan-500 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-200"
+            className="px-16 py-7 text-3xl font-bold bg-gradient-to-r from-blue-500 to-cyan-400 text-white rounded-2xl shadow-2xl hover:scale-105 hover:from-blue-600 hover:to-cyan-500 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-200"
             style={{ marginTop: "1.5rem", boxShadow: "0 6px 24px 0 rgba(33, 150, 243, 0.13)" }}
             onClick={() => setShowCover(false)}
           >
@@ -191,15 +196,18 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen p-6 gap-6 bg-gray-50">
+    <div className="flex flex-col md:flex-row h-screen p-6 gap-6 bg-blue-50">
       {/* 左侧车辆流量 */}
-      <div className="md:w-1/3 bg-white rounded-xl shadow-sm p-6 flex flex-col transition-all duration-300 hover:shadow-md">
+      <div className="md:w-1/3 bg-white rounded-xl shadow-sm p-6 flex flex-col transition-all duration-300 hover:shadow-md border-4 border-blue-500">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-3 h-3 rounded-full bg-blue-500"></div>
           <h2 className="text-xl font-semibold text-gray-800">车辆流量实时监控</h2>
+          {datePart && (
+            <span className="ml-32 text-base text-gray-500 font-mono relative top-0.5">{datePart}</span>
+          )}
         </div>
         
-        <div className="flex-1 bg-gray-50 rounded-lg p-4 flex items-center justify-center text-gray-700 text-lg font-mono overflow-auto"  id="traffic-counter">
+        <div className="flex-1 bg-gray-50 rounded-lg p-4 flex items-center justify-center text-gray-700 text-lg font-mono"  id="traffic-counter">
           <pre className="whitespace-pre-wrap">
             {trafficData.split('\n').map((line, i) => {
               let color = 'text-gray-700';
@@ -224,9 +232,8 @@ export default function Home() {
             <button 
               key={type}
               onClick={() => handleAttackTypeClick(type)}
-              className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 
-              text-white text-sm font-medium rounded-full shadow-sm hover:shadow 
-              transform hover:-translate-y-0.5 transition-all duration-200"
+              className="flex-1 min-w-0 px-0 py-4 text-xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full shadow-sm hover:shadow transform hover:-translate-y-0.5 transition-all duration-200 text-center"
+              style={{maxWidth: '20%'}}
             >
               {type}
             </button>
@@ -253,7 +260,7 @@ export default function Home() {
                 className="bg-gray-50 p-4 rounded-lg border-l-4 border-l-blue-500"
               >
                 <div className="text-sm text-gray-500 mb-1">{item.label}</div>
-                <div className="text-2xl font-bold text-gray-800">{item.value}</div>
+                <div className="text-2xl font-bold text-gray-800">{item.value.replace(/\d{4}-\d{2}-\d{2}/g, '')}</div>
               </div>
             ))}
           </div>
