@@ -203,7 +203,7 @@ export default function Home() {
           <div className="w-3 h-3 rounded-full bg-blue-500"></div>
           <h2 className="text-xl font-semibold text-gray-800">车辆流量实时监控</h2>
           {datePart && (
-            <span className="ml-32 text-base text-gray-500 font-mono relative top-0.5">{datePart}</span>
+            <span className="ml-8 text-base text-gray-500 font-mono relative top-0.5">{datePart}</span>
           )}
         </div>
         

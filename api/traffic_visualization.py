@@ -137,7 +137,7 @@ async def read_dataset(attack_type: str = "正常流量"):
                 date_part, time_part = current_time.split(' ', 1)  # 以第一个空格为界分割
 
                 # 新增：每次流式推送前先推送日期
-                yield f"date_part:{date_part}\n"
+                yield f"date_part:{current_time}\n"
 
                 # 构建并发送数据
                 # 移除"data: "前缀和JSON结构，直接输出CSV格式
