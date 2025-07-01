@@ -7,7 +7,7 @@ First, run the development server:
 ```bash
 npm install
 pip install fastapi uvicorn aiofiles
-uvicorn api.traffic_visualization:app --host 0.0.0.0 --port 8000 --reload
+uvicorn api.route:app --host 0.0.0.0 --port 8000 --reload
 npm run dev
 ```
 
