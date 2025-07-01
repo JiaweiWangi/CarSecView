@@ -46,7 +46,8 @@ model=None
 device=None
 stride_time = 1
 size = int(30 / stride_time)
-car_queue=CarQueue()
+window_size=30
+car_queue=CarQueue(size,stride_time,window_size)
 
 
 # --- 工作线程定义 ---
@@ -58,7 +59,7 @@ def worker_thread_task():
     stride_node = StrideNode(stride_time)
     start_time = loaded_data['正常流量'][0][0]
     for data in loaded_data['正常流量']:
-        if len(car_queue) != size: 
+        if len(car_queue) == size: 
             break
         # 从输入队列获取原始数据项
         # data_type 用于了解上下文, item 是具体的数据行
@@ -239,7 +240,7 @@ async def stream_dataset(data_type: str):
                     print(f"警告：无法解析时间戳或数据项格式错误: {item}")
                     pass # 使用默认间隔
             
-            # await asyncio.sleep(sleep_duration)
+            await asyncio.sleep(delta)
             
             # --- 2. 准备要发送给前端的单行数据 ---
             

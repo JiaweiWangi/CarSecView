@@ -50,11 +50,13 @@ class StrideNode:
 
 
 class CarQueue(deque):
-    def __init__(self, max_len, stride, window_size=3):
+    def __init__(self,max_len,stride,window_size):
         self.max_len = max_len
-        self.node_len = int(window_size / stride)
+        self.stride = stride
+        self.window_size= window_size
+        self.node_len = int(self.window_size / self.stride)
         self.before = None
-        super().__init__(maxlen=max_len)
+        super().__init__(maxlen=self.max_len)
 
     def get_result(self):
         index = 0
