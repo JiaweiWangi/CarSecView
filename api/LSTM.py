@@ -1,6 +1,16 @@
 import torch
 from torch import nn
 
+def init_model():   
+    hidden_size = 50
+    input_size = 1
+    model_file = 'model_original.pt'
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = LSTMAutoencoder(input_size, hidden_size, 2)
+    model.load_state_dict(torch.load(f'./model/{model_file}', map_location=device))
+    model.to(device)
+    model.eval()
+    return model,device
 
 class LSTMAutoencoder(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers):
@@ -17,7 +27,6 @@ class LSTMAutoencoder(nn.Module):
         out = self.decoder(out)
         # out = self.sigmoid(out)
         return out.unsqueeze(-1)
-
 
 # 训练函数
 def train_model(model, train_loader, criterion, optimizer, epochs, device):
