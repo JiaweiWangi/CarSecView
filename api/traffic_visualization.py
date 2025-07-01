@@ -4,6 +4,9 @@ import torch
 import asyncio
 import datetime
 import aiofiles  # 用于异步文件操作
+
+import json #6.30丁
+
 import numpy as np
 from torch import nn
 from fastapi import FastAPI 
@@ -28,83 +31,24 @@ CACHE_STATUS = {}
 #封面组名 校标 制作人
 app = FastAPI()
 
-def init_model():
+def init_model():   
     hidden_size = 50
     input_size = 1
     model_file = 'car_hacking_model.pt'
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = LSTMAutoencoder(input_size, hidden_size, device)
+    model = LSTMAutoencoder(input_size, hidden_size, 2)
     model.load_state_dict(torch.load(f'./model/{model_file}', map_location=device))
     model.to(device)
     model.eval()
     return model,device
-
-stride_time = 1
-size = int(30 / stride_time)
-car_queue=CarQueue(max_len=size, stride=stride_time)
-stride_node = StrideNode(stride_time)
-start_time = time.time()
-current_time = 0
+     
 model,device = init_model()
 transfer=likelihood_transformation()
 transfer.set_global_max(0.09638328545934269)
+stride_time = 1
+size = int(30 / stride_time)
+car_queue=CarQueue(max_len=size, stride=stride_time)
 
-
-async def add2queue(file_path: str):
-    # 初始数据，让客户端知道连接已建立
-    previous_timestamp = None
-    first_data_sent = False
-    
-    # 根据文件类型选择处理函数
-    if file_path.endswith('.csv'):
-        process_line = process_csv_line_add
-    else:
-        process_line = process_txt_line_add
-    # 使用异步文件操作
-    async with aiofiles.open(file_path, 'r') as f:
-        time_diff = 0
-        first_line = True
-        line_count = 0
-        real_time=time.time()
-        async for line in f:
-            # 跳过CSV文件的标题行
-            if first_line and file_path.endswith('.csv'):
-                first_line = False
-                continue
-            line_count += 1
-            # 处理当前行
-            processed_data = await process_line(line)
-            if not processed_data:
-                continue
-            timestamp = processed_data[0]
-            # 计算时间差
-            if previous_timestamp is not None and first_data_sent:
-                time_diff = timestamp - previous_timestamp
-                if(time_diff<0):
-                    time_diff=0
-                # 限制最大延迟，避免过长等待
-                if time_diff > 1.0:
-                    await asyncio.sleep(1.0)  # 最大延迟1秒
-                else:
-                    await asyncio.sleep(time_diff)
-            previous_timestamp = timestamp
-            new_timestamp=real_time+time_diff
-            #切换数据导致的不同数据集的原始时间戳的先后关系 会将datas中的队列清空 试图用当前时间戳代替原始时间戳
-            yield [new_timestamp,processed_data[1],processed_data[2],processed_data[3],processed_data[-1]]
-    
-async def init_queue():
-    for data in add2queue("../test/normal_run_data.txt"):
-        new_data = data
-        current_time = new_data[0]
-        if start_time + stride_time > new_data[0]:
-            stride_node.add_data(new_data)
-        else:
-            car_queue.append(stride_node)
-            if len(car_queue) == size:
-                break
-            
-init_queue()    
-        
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -113,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 #切换或者重启都不传
+
 async def preload_files():#用于预读取文件
     """预加载所有数据集文件到缓存"""
     attack_types = ["Dos攻击", "模糊攻击", "RPM攻击", "Gear攻击", "正常流量"]
@@ -185,19 +130,20 @@ def get_cached_data(cache_key: str) -> Optional[List[Any]]:
     return None
 
 # #时间 ID DLC 数据1 数据2 数据3... 数据n
-async def generate_detect_result(file_path: str):#返回time,loss,label数据对
+async def generate_detect_result(file_path: str):
     cache_key = os.path.basename(file_path)
     cached_data = get_cached_data(cache_key)
     stride_node = StrideNode(stride_time)
     start_time = time.time()
     result = []
     label = []
-    current_time = 0
+    
     if not cached_data:
         # 如果缓存中没有数据，从文件读取并添加到缓存
         async for data in add2queue(file_path):
             new_data = data
-            current_time = new_data[0]
+            current_time = new_data[0]  # 每次更新为当前数据的时间戳
+            
             if start_time + stride_time > new_data[0]:
                 stride_node.add_data(new_data)
             else:
@@ -219,7 +165,6 @@ async def generate_detect_result(file_path: str):#返回time,loss,label数据对
                         z = z.view(1, -1, 1) 
                     z=z.to(device)
                     z_hat=model(z)
-                    #加载慢是模型计算慢 还是异步的问题 不应该有关系
                     criterion=nn.MSELoss()
                     loss=criterion(z_hat,z)
                     label_predict=1
@@ -231,20 +176,25 @@ async def generate_detect_result(file_path: str):#返回time,loss,label数据对
                     else:
                         label=1
                         
-                    yield f"{current_time,float(loss),label,label_predict}\n"
-
+                    yield json.dumps({
+                        "time": datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S'),  # 使用当前数据的时间戳
+                        "log": f"ID:{new_data[1]} DLC:{new_data[2]} DATA:{new_data[3]}",
+                        "loss": float(loss),
+                        "label": label,
+                        "predict": label_predict
+                    }) + "\n"
     else:
         # 从缓存中读取数据
         for data in cached_data:
             new_data = data
+            current_time = new_data[0]  # 每次更新为当前数据的时间戳
+            
             if start_time + stride_time > new_data[0]:
                 stride_node.add_data(new_data)
             else:
                 car_queue.append(stride_node)
                 if len(car_queue) == size:
                     result, label = car_queue.get_result()
-                    results.extend(result)
-                    labels.extend(label)
                 start_time += stride_time
                 while start_time + stride_time < new_data[0]:
                     stride_node = StrideNode(stride_time)
@@ -260,7 +210,6 @@ async def generate_detect_result(file_path: str):#返回time,loss,label数据对
                         z = z.view(1, -1, 1) 
                     z=z.to(device)
                     z_hat=model(z)
-                    #加载慢是模型计算慢 还是异步的问题 不应该有关系
                     criterion=nn.MSELoss()
                     loss=criterion(z_hat,z)
                     label_predict=1
@@ -272,7 +221,13 @@ async def generate_detect_result(file_path: str):#返回time,loss,label数据对
                     else:
                         label=1
                         
-                    yield f"{current_time,float(loss),label,label_predict}\n"
+                    yield json.dumps({
+                        "time": datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S'),  # 使用当前数据的时间戳
+                        "log": f"ID:{new_data[1]} DLC:{new_data[2]} DATA:{new_data[3]}",
+                        "loss": float(loss),
+                        "label": label,
+                        "predict": label_predict
+                    }) + "\n"
 #Dos攻击 模糊攻击 RPM攻击 Gear攻击 正常流量
 @app.get("/detect_attack")
 async def detect_attack(attack_type: str="正常流量"):
@@ -336,7 +291,7 @@ async def process_csv_line(line: str) -> list:
             timestamp = float(parts[0])
             _id = parts[1]
             dlc = int(parts[2])
-            data_parts = [p for p in parts[3:3+dlc+1]]
+            data_parts = [p for p in parts[3:3+dlc]]
             return [timestamp, _id, dlc] + data_parts
         except ValueError:
             return None
@@ -433,6 +388,54 @@ async def process_txt_line_add(line: str) -> list:
     result.append(data_bytes_str)
     result+=label
     return result
+    
+async def add2queue(file_path: str):
+    # 初始数据，让客户端知道连接已建立
+    previous_timestamp = None
+    first_data_sent = False
+    
+    # 根据文件类型选择处理函数
+    if file_path.endswith('.csv'):
+        process_line = process_csv_line_add
+    else:
+        process_line = process_txt_line_add
+    
+    # 使用异步文件操作
+    async with aiofiles.open(file_path, 'r') as f:
+        first_line = True
+        line_count = 0
+        time_diff=0
+        
+        async for line in f:
+            # 跳过CSV文件的标题行
+            if first_line and file_path.endswith('.csv'):
+                first_line = False
+                continue
+            
+            line_count += 1
+            # 处理当前行
+            processed_data = await process_line(line)
+            if not processed_data:
+                continue
+            timestamp = processed_data[0]
+            # 计算时间差
+            if previous_timestamp is not None and first_data_sent:
+                time_diff = timestamp - previous_timestamp
+                if(time_diff<0):
+                    time_diff=0
+                # 限制最大延迟，避免过长等待
+                if time_diff > 1.0:
+                    await asyncio.sleep(1.0)  # 最大延迟1秒
+                else:
+                    await asyncio.sleep(time_diff)
+            previous_timestamp = timestamp
+            #print(processed_data)
+            current_time = time.time()
+            new_timestamp=current_time+time_diff
+        
+            
+            #切换数据导致的不同数据集的原始时间戳的先后关系 会将datas中的队列清空 试图用当前时间戳代替原始时间戳
+            yield [new_timestamp,processed_data[1],processed_data[2],processed_data[3],processed_data[-1]]
         
 async def generate(file_path: str):
     previous_timestamp = None
@@ -480,7 +483,12 @@ async def generate(file_path: str):
             data_part,time_part=current_time.split(' ',1)
             #这个是label
             label=processed_data[-1]
+            #print(label,type(label))
             yield f"date_part:{current_time}\n"
+            if('T'in label):
+                label=0
+            else:
+                label=1
 
             # 构建并发送数据
             # 移除"data: "前缀和JSON结构，直接输出CSV格式
@@ -490,7 +498,9 @@ async def generate(file_path: str):
                         f"{','.join(str(processed_data[i]) for i in range(3, int(processed_data[2]) + 3))},"
                         f"{label}\n")
             yield f"{data_str}\n"
+            #print(data_str)
             first_data_sent = True
+
 
 @app.get("/read_dataset")
 async def read_dataset(attack_type: str = "Dos攻击"):

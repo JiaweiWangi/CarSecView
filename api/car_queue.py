@@ -86,5 +86,5 @@ class CarQueue(deque):
             labels.append(label)
 
             # print(results)
-        print(len(results))
+        #print(len(results))
         return results, labels
