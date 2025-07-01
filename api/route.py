@@ -7,7 +7,7 @@ import json # 引入 json 库
 import datetime
 from tracemalloc import start
 import torch
-
+import pickle
 from fastapi import FastAPI, HTTPException,Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,15 +46,34 @@ model=None
 device=None
 stride_time = 1
 size = int(30 / stride_time)
-car_queue=CarQueue(max_len=size, stride=stride_time)
+car_queue=CarQueue()
 
 
 # --- 工作线程定义 ---
 def worker_thread_task():
     """
     工作线程：获取原始数据，进行处理，并将结果放入输出队列。
-    
     """
+
+    stride_node = StrideNode(stride_time)
+    start_time = loaded_data['正常流量'][0][0]
+    for data in loaded_data['正常流量']:
+        if len(car_queue) != size: 
+            break
+        # 从输入队列获取原始数据项
+        # data_type 用于了解上下文, item 是具体的数据行
+        new_data = data
+        if start_time + stride_time > new_data[0]:
+            # print(start_time,new_data[0])
+            stride_node.add_data(new_data)
+        else:
+            car_queue.append(stride_node)
+            start_time += stride_time
+            while start_time + stride_time < new_data[0]:
+                stride_node = StrideNode(stride_time)
+                car_queue.append(stride_node)
+                start_time += stride_time
+
     model,device = init_model()
     print(f"👍 鲁棒的LSTM模型加载完成")
     # print("✅ 工作线程已启动，等待数据...")
@@ -66,11 +85,16 @@ def worker_thread_task():
     transfer=likelihood_transformation()
     transfer.set_global_max(0.1086178408236927)
     stride_node = StrideNode(stride_time)
-    start_time = 0
+    pre_type = "None"
     while True:
+        print(len(car_queue))
         # 从输入队列获取原始数据项
         # data_type 用于了解上下文, item 是具体的数据行
         data_type, new_data = data_in_queue.get()
+        if pre_type != data_type:
+            pre_type = data_type
+            start_time = loaded_data[data_type][0][0]
+
         if start_time + stride_time > new_data[0]:
             # print(start_time,new_data[0])
             stride_node.add_data(new_data)
@@ -98,7 +122,10 @@ def worker_thread_task():
                     "original_label": data_type,
                     "predicted_label":label_predict
                 }
-                
+                # filename = 'car-queue.pkl'
+                # with open(filename, 'wb') as f:
+                #     pickle.dump(car_queue, f)
+                # print(f"队列已成功保存到文件: '{filename}'")
                 # ‼️ 关键: 从同步的 worker 线程中，安全地将结果放入异步的 results_out_queue
                 # 我们必须使用 run_coroutine_threadsafe，因为它能确保线程安全
                 if main_loop and not main_loop.is_closed():
@@ -152,6 +179,7 @@ async def startup_event():
             print(f"  ❌ {name} - 文件未找到: {path}")
 
     print(f"👍 数据集加载完成。已加载的类型: {list(loaded_data.keys())}")
+
 
     # 启动工作线程
     print("➡️ 步骤 2/2: 正在启动后台工作线程...")
@@ -211,7 +239,7 @@ async def stream_dataset(data_type: str):
                     print(f"警告：无法解析时间戳或数据项格式错误: {item}")
                     pass # 使用默认间隔
             
-            await asyncio.sleep(sleep_duration)
+            # await asyncio.sleep(sleep_duration)
             
             # --- 2. 准备要发送给前端的单行数据 ---
             
@@ -229,7 +257,7 @@ async def stream_dataset(data_type: str):
             # 格式: 时间戳 ID:xxx DLC:x Data:xx xx xx xx 标签
             # raw_line = f"{time.time()} ID:{item[1]} DLC:{int(item[2])} {item[3]},{item[-1]}"
             raw_line = f"{item[0]} ID:{item[1]} DLC:{int(item[2])} {item[3]},{item[-1]}"
-
+            
             # --- 3. 组合最终的流式字符串 ---
             # 格式: [颜色代码]原始文本[重置颜色代码][换行符]
             data_str = f"{color_code}{raw_line}{COLOR_RESET}\n"
