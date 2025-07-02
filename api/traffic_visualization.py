@@ -262,15 +262,15 @@ async def clear_cache():
 def get_file_path(attack_type: str) -> str:
     """根据攻击类型获取对应的文件路径"""
     if attack_type == "Dos攻击":
-        return "./test/DoS_dataset.csv"
+        return "./data/DoS_dataset.csv"
     elif attack_type == "模糊攻击":
-        return "./test/Fuzzy_dataset.csv"
+        return "./data/Fuzzy_dataset.csv"
     elif attack_type == "RPM攻击":
-        return "./test/RPM_dataset.csv"
+        return "./data/RPM_dataset.csv"
     elif attack_type == "Gear攻击":
-        return "./test/gear_dataset.csv"
+        return "./data/gear_dataset.csv"
     elif attack_type == "正常流量":
-        return "./test/normal_run_data.txt"
+        return "./data/normal_run_data.txt"
     else:
         raise ValueError(f"未知攻击类型: {attack_type}")
 
