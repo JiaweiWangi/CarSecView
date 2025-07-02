@@ -88,7 +88,7 @@ def worker_thread_task():
     stride_node = StrideNode(stride_time)
     pre_type = "None"
     while True:
-        print(len(car_queue))
+        # print(len(car_queue))
         # 从输入队列获取原始数据项
         # data_type 用于了解上下文, item 是具体的数据行
         data_type, new_data = data_in_queue.get()
@@ -97,7 +97,7 @@ def worker_thread_task():
             start_time = loaded_data[data_type][0][0]
 
         if start_time + stride_time > new_data[0]:
-            # print(start_time,new_data[0])
+            print(start_time,new_data[0])
             stride_node.add_data(new_data)
         else:
             car_queue.append(stride_node)
@@ -138,7 +138,6 @@ def worker_thread_task():
                 stride_node = StrideNode(stride_time)
                 car_queue.append(stride_node)
                 start_time += stride_time
-            
         if new_data is None:
             print("工作线程收到结束信号，正在退出...")
             # 向结果队列也放入一个终止信号，以防有监听器在等待
@@ -164,10 +163,10 @@ async def startup_event():
     # 定义数据集路径
     datasets = {
         "正常流量": './data/normal_run_data.txt',
-        # "Dos攻击": './data/DoS_dataset.csv',
-        # "模糊攻击": './data/Fuzzy_dataset.csv',
-        # "Gear攻击": './data/Gear_dataset.csv',
-        # "RPM攻击": './data/RPM_dataset.csv'
+        "Dos攻击": './data/DoS_dataset.csv',
+        "模糊攻击": './data/Fuzzy_dataset.csv',
+        "Gear攻击": './data/Gear_dataset.csv',
+        "RPM攻击": './data/RPM_dataset.csv'
     }
     
     # 循环加载所有数据
@@ -240,7 +239,8 @@ async def stream_dataset(data_type: str):
                     print(f"警告：无法解析时间戳或数据项格式错误: {item}")
                     pass # 使用默认间隔
             
-            await asyncio.sleep(delta)
+                await asyncio.sleep(delta)
+            
             
             # --- 2. 准备要发送给前端的单行数据 ---
             
@@ -263,6 +263,10 @@ async def stream_dataset(data_type: str):
             # 格式: [颜色代码]原始文本[重置颜色代码][换行符]
             data_str = f"{color_code}{raw_line}{COLOR_RESET}\n"
             data_in_queue.put((data_type, item))
+            # await data_in_queue.join()
+            while data_in_queue.empty(): 
+                a=a+1
+            
             yield data_str.encode("utf-8")
             
             # 更新 previous_item 以供下一次循环计算时间差
